@@ -8,6 +8,6 @@ run: $(builddir)/main
 clean:
 	rm -rf build
 
-$(builddir)/main: main.c
+$(builddir)/main: main.c xdg-shell-protocol.c wayland.c shm.c
 	mkdir -p $(builddir)
 	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
