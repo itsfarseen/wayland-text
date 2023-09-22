@@ -1,6 +1,6 @@
 #include "wayland.h"
 #include "shm.h"
-#include "xdg-shell-protocol.h"
+#include "wayland/generated/xdg-shell-protocol.h"
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
