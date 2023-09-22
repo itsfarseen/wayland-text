@@ -21,7 +21,7 @@ static void xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base,
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer);
 
-static const struct wl_registry_listener registry_listener = {
+static const struct wl_registry_listener wl_registry_listener = {
     .global = global_add,
     .global_remove = global_remove,
 };
@@ -53,7 +53,7 @@ int wl_main(char *title, struct wl_config wl_config, void *data, draw_fn draw) {
 
   struct wl_registry *registry = wl_display_get_registry(display);
 
-  wl_registry_add_listener(registry, &registry_listener, &globals);
+  wl_registry_add_listener(registry, &wl_registry_listener, &globals);
   wl_display_roundtrip(display);
 
   xdg_wm_base_add_listener(globals.xdg_wm_base, &xdg_wm_base_listener,
