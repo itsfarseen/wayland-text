@@ -1,0 +1,12 @@
+{
+	"project_root": ".",
+	"cc": "gcc",
+	"cflags": "",
+	"ldflags": "-lwayland-client",
+	"ignore_dirs": [
+		".git",
+		".ccls-cache"
+	],
+	"build_dir": "build",
+	"binary": "main"
+}
