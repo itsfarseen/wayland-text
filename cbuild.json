@@ -2,11 +2,14 @@
 	"project_root": ".",
 	"cc": "gcc",
 	"cflags": "",
-	"ldflags": "-lwayland-client",
+	"ldflags": "",
 	"ignore_dirs": [
 		".git",
 		".ccls-cache"
 	],
 	"build_dir": "build",
-	"binary": "main"
+	"binary": "main",
+	"dependencies": [
+		"wayland-client"
+	]
 }
