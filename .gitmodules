@@ -1,0 +1,3 @@
+[submodule "cbuild.py"]
+	path = cbuild.py
+	url = https://github.com/itsfarseen/cbuild.py
