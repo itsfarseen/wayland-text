@@ -7,7 +7,7 @@
 		".git",
 		".ccls-cache"
 	],
-	"build_dir": "build",
+	"build_dir": "../build",
 	"binary": "main",
 	"dependencies": [
 		"wayland-client"
