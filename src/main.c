@@ -2,11 +2,13 @@
 #include <stdio.h>
 #include <wayland-client.h>
 
-void draw(struct wl_globals *globals, void *frame) {
+void draw(struct twl_window *win, void *frame) {
   uint32_t *data = frame;
-  uint32_t width = globals->wl_config.width;
-  uint32_t height = globals->wl_config.height;
+  uint32_t width = win->config.width;
+  uint32_t height = win->config.height;
+  printf("WxH: %ux%u\n", width, height);
 
+  printf("HERE 4\n");
   /* Draw checkerboxed background */
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
@@ -16,15 +18,16 @@ void draw(struct wl_globals *globals, void *frame) {
         data[y * width + x] = 0xFFEEEEEE;
     }
   }
+  printf("HERE 4.1\n");
 }
 
 int main(int argc, char *argv[]) {
-  struct wl_config wl_config = {
+  struct twl_window_config config = {
       .width = 800,
       .height = 600,
       .bytes_per_pixel = 4,
       .format = WL_SHM_FORMAT_XRGB8888,
   };
-  wl_main("Hello, new world!", wl_config, NULL, draw);
+  twl_main("Hello, new world!", config, draw, NULL);
   return 0;
 }

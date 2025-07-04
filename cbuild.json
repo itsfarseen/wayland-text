@@ -1,7 +1,7 @@
 {
 	"project_root": "src",
 	"cc": "gcc",
-	"cflags": "",
+	"cflags": "-g",
 	"ldflags": "",
 	"ignore_dirs": [
 		".git",

@@ -2,3 +2,4 @@ build
 .ccls-cache
 __pycache__
 notes.txt
+.gdb_history

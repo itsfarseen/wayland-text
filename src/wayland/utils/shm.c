@@ -4,6 +4,8 @@
 #include <time.h>
 #include <unistd.h>
 
+// TODO: Switch to memfd
+
 static void randname(char *buf) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
