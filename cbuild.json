@@ -1,5 +1,5 @@
 {
-	"project_root": ".",
+	"project_root": "src",
 	"cc": "gcc",
 	"cflags": "",
 	"ldflags": "",
