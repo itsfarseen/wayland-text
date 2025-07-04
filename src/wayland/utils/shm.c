@@ -1,10 +1,12 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
 
 // TODO: Switch to memfd
+// TODO: Cleanup. I don't fully understand what's going on with the loop in allocate and resize.
 
 static void randname(char *buf) {
   struct timespec ts;
@@ -45,3 +47,21 @@ int twl_shm_allocate(size_t size) {
   }
   return fd;
 }
+
+int twl_shm_resize(int fd, size_t size) {
+  int ret;
+  do {
+    ret = ftruncate(fd, size);
+    if (ret != 0) {
+      perror("failed to resize shm");
+    }
+  } while (ret < 0 && errno == EINTR);
+
+  if (ret < 0) {
+    close(fd);
+    return -1;
+  }
+  return 0;
+}
+
+int twl_shm_close(int fd) { return close(fd); }

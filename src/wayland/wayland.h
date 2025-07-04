@@ -37,6 +37,14 @@ struct twl_window {
   struct wl_surface *wl_surface;
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
+  // Buffers
+  int pool_fd;
+  uint32_t pool_size;
+  void *buffer_back_data;
+  void *buffer_front_data;
+  struct wl_shm_pool *wl_shm_pool;
+  struct wl_buffer *wl_buffer_back;
+  struct wl_buffer *wl_buffer_front;
   // Config
   struct twl_window_constraints constraints;
   struct twl_window_config config;
