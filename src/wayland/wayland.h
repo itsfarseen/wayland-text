@@ -29,6 +29,12 @@ struct twl_window_constraints {
   uint32_t default_height;
 };
 
+struct twl_buffer_pool {
+  int fd;
+  uint32_t size;
+  struct wl_shm_pool *wl_shm_pool;
+};
+
 struct twl_buffer {
   struct fzn_mmap_handle mmap;
   struct wl_buffer *wl_buffer;
@@ -42,9 +48,7 @@ struct twl_window {
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
   // Buffers
-  int pool_fd;
-  uint32_t pool_size;
-  struct wl_shm_pool *wl_shm_pool;
+  struct twl_buffer_pool pool;
   struct twl_buffer buffer_back;
   struct twl_buffer buffer_front;
   // Config

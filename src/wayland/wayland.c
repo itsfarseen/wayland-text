@@ -161,14 +161,14 @@ static void configure_buffers(struct twl_window *win) {
 
   uint32_t pool_size = buffer_size * num_buffers;
 
-  if (!win->pool_fd) {
+  if (!win->pool.fd) {
     printf("new shm\n");
     int fd = twl_shm_allocate(pool_size);
     if (fd < 0) {
       panic("SHM allocate failed\n");
     }
-    win->pool_fd = fd;
-    win->pool_size = pool_size;
+    win->pool.fd = fd;
+    win->pool.size = pool_size;
 
     struct fzn_mmap_handle buffer_back_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (buffer_back_mmap.addr == NULL) {
@@ -184,7 +184,7 @@ static void configure_buffers(struct twl_window *win) {
     win->buffer_front.mmap = buffer_front_mmap;
 
     struct wl_shm_pool *pool = wl_shm_create_pool(win->ctx.wl_shm, fd, buffer_size * num_buffers);
-    win->wl_shm_pool = pool;
+    win->pool.wl_shm_pool = pool;
 
     struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(pool, 0, width, height, stride, format);
     struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(pool, buffer_size, width, height, stride, format);
@@ -194,14 +194,14 @@ static void configure_buffers(struct twl_window *win) {
     win->buffer_back.wl_buffer = buffer_back;
     win->buffer_front.wl_buffer = buffer_front;
   } else {
-    int fd = win->pool_fd;
-    if (pool_size > win->pool_size) {
+    int fd = win->pool.fd;
+    if (pool_size > win->pool.size) {
       int ok = twl_shm_resize(fd, buffer_size * num_buffers);
       if (ok != 0) {
         printf("shm resize %d\n", buffer_size);
         panic("SHM resize failed\n");
       }
-      win->pool_size = pool_size;
+      win->pool.size = pool_size;
 
       struct fzn_mmap_handle buffer_back_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
       if (buffer_back_mmap.addr == NULL) {
@@ -217,10 +217,10 @@ static void configure_buffers(struct twl_window *win) {
       win->buffer_front.mmap = buffer_front_mmap;
     }
 
-    wl_shm_pool_resize(win->wl_shm_pool, buffer_size * num_buffers);
+    wl_shm_pool_resize(win->pool.wl_shm_pool, buffer_size * num_buffers);
 
-    struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(win->wl_shm_pool, 0, width, height, stride, format);
-    struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(win->wl_shm_pool, buffer_size, width, height, stride, format);
+    struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, 0, width, height, stride, format);
+    struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, buffer_size, width, height, stride, format);
     wl_buffer_add_listener(buffer_back, &wl_buffer_listener, win);
     wl_buffer_add_listener(buffer_front, &wl_buffer_listener, win);
     win->buffer_back.wl_buffer = buffer_back;
