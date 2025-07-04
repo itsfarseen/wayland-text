@@ -1,7 +1,19 @@
 #include "../wayland-protocols/xdg-shell-protocol.h"
+#include "./utils/fzn_mmap.h"
 #include <wayland-client.h>
 
+struct twl_context {
+  // Wayland Display
+  struct wl_display *wl_display;
+  // Registry Objects
+  struct wl_compositor *wl_compositor;
+  struct wl_shm *wl_shm;
+  struct xdg_wm_base *xdg_wm_base;
+};
+
 struct twl_window;
+
+typedef void (*draw_fn)(struct twl_window *win, void *buffer);
 
 struct twl_window_config {
   uint32_t width;
@@ -17,18 +29,10 @@ struct twl_window_constraints {
   uint32_t default_height;
 };
 
-typedef void (*draw_fn)(struct twl_window *win, void *buffer);
-
-struct twl_context {
-  // Wayland Display
-  struct wl_display *wl_display;
-  // Registry Objects
-  struct wl_compositor *wl_compositor;
-  struct wl_shm *wl_shm;
-  struct xdg_wm_base *xdg_wm_base;
+struct twl_buffer {
+  struct fzn_mmap_handle mmap;
+  struct wl_buffer *wl_buffer;
 };
-
-int twl_init(struct twl_context *ctx);
 
 struct twl_window {
   // Parent context
@@ -40,11 +44,9 @@ struct twl_window {
   // Buffers
   int pool_fd;
   uint32_t pool_size;
-  void *buffer_back_data;
-  void *buffer_front_data;
   struct wl_shm_pool *wl_shm_pool;
-  struct wl_buffer *wl_buffer_back;
-  struct wl_buffer *wl_buffer_front;
+  struct twl_buffer buffer_back;
+  struct twl_buffer buffer_front;
   // Config
   struct twl_window_constraints constraints;
   struct twl_window_config config;
@@ -55,4 +57,5 @@ struct twl_window {
   void *user_data;
 };
 
+int twl_init(struct twl_context *ctx);
 int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn draw, void *data);

@@ -42,6 +42,7 @@ int twl_shm_allocate(size_t size) {
     ret = ftruncate(fd, size);
   } while (ret < 0 && errno == EINTR);
   if (ret < 0) {
+    perror("ftruncate in twl_shm_allocate");
     close(fd);
     return -1;
   }
