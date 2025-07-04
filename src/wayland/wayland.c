@@ -7,19 +7,58 @@
 #include <sys/mman.h>
 #include <wayland-client.h>
 
-static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial);
+// Wayland Listeners
+// =================
+
 static void xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial);
-static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer);
+static const struct xdg_wm_base_listener xdg_wm_base_listener = {.ping = xdg_wm_base_ping};
+
+static void xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
+  xdg_wm_base_pong(xdg_wm_base, serial); //
+}
 
 static struct wl_buffer *draw_frame(struct twl_window *win);
 
-static const struct xdg_wm_base_listener xdg_wm_base_listener = {.ping = xdg_wm_base_ping};
+static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial);
 static const struct xdg_surface_listener xdg_surface_listener = {.configure = xdg_surface_configure};
+
+static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
+  struct twl_window *win = data;
+  xdg_surface_ack_configure(xdg_surface, serial);
+
+  struct wl_buffer *wl_buffer = draw_frame(win);
+
+  wl_surface_attach(win->wl_surface, wl_buffer, 0, 0);
+  wl_surface_commit(win->wl_surface);
+}
+
+static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer);
 static const struct wl_buffer_listener wl_buffer_listener = {.release = wl_buffer_release};
+
+static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {
+  wl_buffer_destroy(wl_buffer); //
+}
 
 static void wl_registry_global_add(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version);
 static void wl_registry_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name);
 static const struct wl_registry_listener wl_registry_listener = {.global = wl_registry_global_add, .global_remove = wl_registry_global_remove};
+
+static void wl_registry_global_add(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
+  struct twl_context *ctx = data;
+
+  if (strcmp(interface, wl_shm_interface.name) == 0) {
+    ctx->wl_shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, version);
+  } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+    ctx->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, version);
+  } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
+    ctx->wl_compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, version);
+  }
+}
+
+static void wl_registry_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name) { /* todo */ }
+
+// Library
+// =======
 
 int twl_init(struct twl_context *ctx) {
   struct wl_display *display = wl_display_connect(NULL);
@@ -83,38 +122,6 @@ int twl_main(char *title, struct twl_window_config config, draw_fn draw, void *d
   return 0;
 }
 
-/* struct wl_globals */
-
-static void wl_registry_global_add(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
-  struct twl_context *ctx = data;
-
-  if (strcmp(interface, wl_shm_interface.name) == 0) {
-    ctx->wl_shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, version);
-  } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-    ctx->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, version);
-  } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
-    ctx->wl_compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, version);
-  }
-}
-
-static void wl_registry_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name) { /* todo */ }
-
-/* XDG Shell */
-
-static void xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
-  xdg_wm_base_pong(xdg_wm_base, serial); //
-}
-
-static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
-  struct twl_window *win = data;
-  xdg_surface_ack_configure(xdg_surface, serial);
-
-  struct wl_buffer *wl_buffer = draw_frame(win);
-
-  wl_surface_attach(win->wl_surface, wl_buffer, 0, 0);
-  wl_surface_commit(win->wl_surface);
-}
-
 struct wl_buffer *draw_frame(struct twl_window *win) {
   struct twl_window_config twl_config = win->config;
   uint32_t width = twl_config.width;
@@ -144,8 +151,4 @@ struct wl_buffer *draw_frame(struct twl_window *win) {
   munmap(buffer_data, size);
   wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
   return buffer;
-}
-
-void wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {
-  wl_buffer_destroy(wl_buffer); //
 }
