@@ -83,7 +83,7 @@ int twl_init(struct twl_context *ctx) {
   return 0;
 }
 
-int twl_window_init(struct twl_context *ctx, struct twl_window *win, draw_fn draw_fn, void *user_data) {
+int twl_window_init(struct twl_context *ctx, struct twl_window *win, const char *title, draw_fn draw_fn, void *user_data) {
   win->ctx = *ctx;
   win->draw_fn = draw_fn;
   win->user_data = user_data;
@@ -95,6 +95,10 @@ int twl_window_init(struct twl_context *ctx, struct twl_window *win, draw_fn dra
   win->xdg_surface = xdg_surface;
   xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, win);
 
+  struct xdg_toplevel *xdg_toplevel = xdg_surface_get_toplevel(win->xdg_surface);
+  win->xdg_toplevel = xdg_toplevel;
+  xdg_toplevel_set_title(xdg_toplevel, title);
+
   return 0;
 }
 
@@ -105,13 +109,10 @@ int twl_main(char *title, struct twl_window_config config, draw_fn draw, void *d
   if (twl_init(&ctx) != 0) {
     return -1;
   }
-  if (twl_window_init(&ctx, &win, draw, data) != 0) {
+  if (twl_window_init(&ctx, &win, title, draw, data) != 0) {
     return -1;
   }
   win.config = config;
-
-  struct xdg_toplevel *xdg_toplevel = xdg_surface_get_toplevel(win.xdg_surface);
-  xdg_toplevel_set_title(xdg_toplevel, title);
 
   wl_surface_commit(win.wl_surface);
 
