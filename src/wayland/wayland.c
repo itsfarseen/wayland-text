@@ -24,12 +24,70 @@ static const struct xdg_surface_listener xdg_surface_listener = {.configure = xd
 
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
   struct twl_window *win = data;
+  win->config = win->config_pending;
+
   xdg_surface_ack_configure(xdg_surface, serial);
 
   struct wl_buffer *wl_buffer = draw_frame(win);
 
   wl_surface_attach(win->wl_surface, wl_buffer, 0, 0);
   wl_surface_commit(win->wl_surface);
+}
+
+static void xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states);
+static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel);
+static void xdg_toplevel_configure_bounds(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height);
+static void xdg_toplevel_wm_capabilities(void *data, struct xdg_toplevel *xdg_toplevel, struct wl_array *capabilities);
+static const struct xdg_toplevel_listener xdg_toplevel_listener = {
+    .configure = xdg_toplevel_configure,
+    .close = xdg_toplevel_close,
+    .configure_bounds = xdg_toplevel_configure_bounds,
+    .wm_capabilities = xdg_toplevel_wm_capabilities,
+};
+
+static void xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states) {
+  struct twl_window *win = data;
+  memset(&win->config_pending, 0, sizeof(struct twl_window_config));
+
+  if (width == 0)
+    width = win->constraints.default_width;
+  if (height == 0)
+    height = win->constraints.default_height;
+
+  win->config_pending.width = width;
+  win->config_pending.height = height;
+
+  uint32_t *state;
+  wl_array_for_each(state, states) {
+    switch (*state) {
+    case XDG_TOPLEVEL_STATE_MAXIMIZED:
+      win->config_pending.is_maximized = 1;
+      break;
+    case XDG_TOPLEVEL_STATE_ACTIVATED:
+      win->config_pending.is_activated = 1;
+      break;
+    case XDG_TOPLEVEL_STATE_RESIZING:
+      win->config_pending.is_resizing = 1;
+      break;
+    case XDG_TOPLEVEL_STATE_FULLSCREEN:
+      win->config_pending.is_fullscreen = 1;
+      break;
+      // TODO: Suspended
+    }
+  }
+}
+
+static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel) {
+  struct twl_window *win = data;
+  win->should_close = 1;
+}
+
+static void xdg_toplevel_configure_bounds(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height) {
+  // TODO
+}
+
+static void xdg_toplevel_wm_capabilities(void *data, struct xdg_toplevel *xdg_toplevel, struct wl_array *capabilities) {
+  // TODO
 }
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer);
@@ -98,11 +156,14 @@ int twl_window_init(struct twl_context *ctx, struct twl_window *win, const char 
   struct xdg_toplevel *xdg_toplevel = xdg_surface_get_toplevel(win->xdg_surface);
   win->xdg_toplevel = xdg_toplevel;
   xdg_toplevel_set_title(xdg_toplevel, title);
+  xdg_toplevel_add_listener(xdg_toplevel, &xdg_toplevel_listener, win);
+
+  win->should_close = 0;
 
   return 0;
 }
 
-int twl_main(char *title, struct twl_window_config config, draw_fn draw, void *data) {
+int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn draw, void *data) {
   struct twl_context ctx;
   struct twl_window win;
 
@@ -112,11 +173,11 @@ int twl_main(char *title, struct twl_window_config config, draw_fn draw, void *d
   if (twl_window_init(&ctx, &win, title, draw, data) != 0) {
     return -1;
   }
-  win.config = config;
+  win.constraints = *constraints;
 
   wl_surface_commit(win.wl_surface);
 
-  while (wl_display_dispatch(ctx.wl_display) != -1) {
+  while (wl_display_dispatch(ctx.wl_display) != -1 && !win.should_close) {
   }
 
   wl_display_disconnect(ctx.wl_display);
@@ -125,13 +186,13 @@ int twl_main(char *title, struct twl_window_config config, draw_fn draw, void *d
 
 struct wl_buffer *draw_frame(struct twl_window *win) {
   struct twl_window_config twl_config = win->config;
-  uint32_t width = twl_config.width;
-  uint32_t height = twl_config.height;
-  uint32_t stride = width * twl_config.bytes_per_pixel;
+  uint32_t width = win->config.width;
+  uint32_t height = win->config.height;
+  uint32_t stride = width * 4;
   uint32_t size = stride * height;
-  uint32_t format = twl_config.format;
+  uint32_t format = WL_SHM_FORMAT_XRGB8888;
 
-  int fd = allocate_shm_file(size);
+  int fd = twl_shm_allocate(size);
   if (fd == -1) {
     return NULL;
   }

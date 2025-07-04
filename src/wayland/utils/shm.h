@@ -1,3 +1,3 @@
 #include <unistd.h>
 
-int allocate_shm_file(size_t size);
+int twl_shm_allocate(size_t size);

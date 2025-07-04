@@ -6,8 +6,15 @@ struct twl_window;
 struct twl_window_config {
   uint32_t width;
   uint32_t height;
-  uint32_t bytes_per_pixel;
-  uint32_t format;
+  uint32_t is_maximized;
+  uint32_t is_fullscreen;
+  uint32_t is_resizing;
+  uint32_t is_activated;
+};
+
+struct twl_window_constraints {
+  uint32_t default_width;
+  uint32_t default_height;
 };
 
 typedef void (*draw_fn)(struct twl_window *win, void *buffer);
@@ -31,9 +38,13 @@ struct twl_window {
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
   // Config
+  struct twl_window_constraints constraints;
   struct twl_window_config config;
+  struct twl_window_config config_pending;
+  uint32_t should_close;
+  // User draw hook
   draw_fn draw_fn;
   void *user_data;
 };
 
-int twl_main(char *title, struct twl_window_config config, draw_fn draw, void *data);
+int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn draw, void *data);

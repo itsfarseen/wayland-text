@@ -31,7 +31,7 @@ static int create_shm_file(void) {
   return -1;
 }
 
-int allocate_shm_file(size_t size) {
+int twl_shm_allocate(size_t size) {
   int fd = create_shm_file();
   if (fd < 0)
     return -1;
