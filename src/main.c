@@ -6,9 +6,7 @@ void draw(struct twl_window *win, void *frame) {
   uint32_t *data = frame;
   uint32_t width = win->config.width;
   uint32_t height = win->config.height;
-  printf("WxH: %ux%u\n", width, height);
 
-  printf("HERE 4\n");
   /* Draw checkerboxed background */
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
@@ -18,7 +16,6 @@ void draw(struct twl_window *win, void *frame) {
         data[y * width + x] = 0xFFEEEEEE;
     }
   }
-  printf("HERE 4.1\n");
 }
 
 int main(int argc, char *argv[]) {
