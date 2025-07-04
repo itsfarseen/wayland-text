@@ -1,4 +1,4 @@
-#include "generated/xdg-shell-protocol.h"
+#include "../wayland-protocols/xdg-shell-protocol.h"
 #include <wayland-client.h>
 
 struct wl_globals;
