@@ -78,11 +78,7 @@ static void cb_xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uin
   xdg_wm_base_pong(xdg_wm_base, serial); //
 }
 
-static void cb_wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {
-  struct twl_window *win = data;
-  if (wl_buffer != win->buffer_back.wl_buffer && wl_buffer != win->buffer_front.wl_buffer)
-    wl_buffer_destroy(wl_buffer);
-}
+static void cb_wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {}
 
 static void cb_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
   struct twl_window *win = data;
@@ -100,7 +96,7 @@ static void cb_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface
 
 static void cb_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states) {
   struct twl_window *win = data;
-  memset(&win->config_pending, 0, sizeof(struct twl_window_config));
+  zero_init(&win->config_pending, struct twl_window_config);
 
   if (width == 0)
     width = win->constraints.default_width;
@@ -166,7 +162,6 @@ static void configure_buffers(struct twl_window *win) {
   uint32_t pool_size = buffer_size * num_buffers;
 
   if (!win->pool.fd) {
-    printf("new shm\n");
     int fd = twl_shm_allocate(pool_size);
     if (fd < 0) {
       panic("SHM allocate failed\n");
@@ -177,16 +172,12 @@ static void configure_buffers(struct twl_window *win) {
     struct wl_shm_pool *pool = wl_shm_create_pool(win->ctx.wl_shm, fd, buffer_size * num_buffers);
     win->pool.wl_shm_pool = pool;
   } else if (pool_size > win->pool.size) {
-    printf("resize shm\n");
     int ok = twl_shm_resize(win->pool.fd, buffer_size * num_buffers);
     if (ok != 0) {
-      printf("shm resize %d\n", buffer_size);
       panic("SHM resize failed\n");
     }
     win->pool.size = pool_size;
     wl_shm_pool_resize(win->pool.wl_shm_pool, buffer_size * num_buffers);
-  } else {
-    printf("reuse shm\n");
   }
 
   int fd = win->pool.fd;
@@ -205,6 +196,11 @@ static void configure_buffers(struct twl_window *win) {
 
   win->buffer_back.mmap = buffer_back_mmap;
   win->buffer_front.mmap = buffer_front_mmap;
+
+  if (win->buffer_back.wl_buffer)
+    wl_buffer_destroy(win->buffer_back.wl_buffer);
+  if (win->buffer_front.wl_buffer)
+    wl_buffer_destroy(win->buffer_front.wl_buffer);
 
   struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, 0, width, height, stride, format);
   struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, buffer_size, width, height, stride, format);
