@@ -9,6 +9,7 @@
 #include <wayland-client.h>
 
 #define panic(text) { printf(text); exit(-1); }
+#define try_or_panic(val, text) { if((val) != 0) panic(text) }
 #define zero_init(var, type) memset(var, 0, sizeof(type))
 
 // Functions
@@ -145,8 +146,13 @@ static void cb_xdg_toplevel_wm_capabilities(void *data, struct xdg_toplevel *xdg
 // Implementation: Library
 // =======================
 
+static size_t align_to_pagesize(size_t size) {
+  size_t page_size = getpagesize();
+  size = (size + page_size - 1) & ~(page_size - 1); // Round up to page boundary
+  return size;
+}
+
 static void configure_buffers(struct twl_window *win) {
-  struct twl_window_config twl_config = win->config;
   uint32_t width = win->config.width;
   uint32_t height = win->config.height;
   uint32_t stride = width * 4;
@@ -155,9 +161,7 @@ static void configure_buffers(struct twl_window *win) {
   uint32_t buffer_size = stride * height;
   uint32_t num_buffers = 2;
 
-  // allign buffer_size to page_size
-  size_t page_size = getpagesize();
-  buffer_size = (buffer_size + page_size - 1) & ~(page_size - 1); // Round up to page boundary
+  buffer_size = align_to_pagesize(buffer_size);
 
   uint32_t pool_size = buffer_size * num_buffers;
 
@@ -170,62 +174,44 @@ static void configure_buffers(struct twl_window *win) {
     win->pool.fd = fd;
     win->pool.size = pool_size;
 
-    struct fzn_mmap_handle buffer_back_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (buffer_back_mmap.addr == NULL) {
-      panic("Failed to mmap back buffer\n");
-    }
-
-    struct fzn_mmap_handle buffer_front_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buffer_size);
-    if (buffer_front_mmap.addr == NULL) {
-      panic("Failed to mmap front buffer\n");
-    }
-
-    win->buffer_back.mmap = buffer_back_mmap;
-    win->buffer_front.mmap = buffer_front_mmap;
-
     struct wl_shm_pool *pool = wl_shm_create_pool(win->ctx.wl_shm, fd, buffer_size * num_buffers);
     win->pool.wl_shm_pool = pool;
-
-    struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(pool, 0, width, height, stride, format);
-    struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(pool, buffer_size, width, height, stride, format);
-    wl_buffer_add_listener(buffer_back, &wl_buffer_listener, win);
-    wl_buffer_add_listener(buffer_front, &wl_buffer_listener, win);
-
-    win->buffer_back.wl_buffer = buffer_back;
-    win->buffer_front.wl_buffer = buffer_front;
-  } else {
-    int fd = win->pool.fd;
-    if (pool_size > win->pool.size) {
-      int ok = twl_shm_resize(fd, buffer_size * num_buffers);
-      if (ok != 0) {
-        printf("shm resize %d\n", buffer_size);
-        panic("SHM resize failed\n");
-      }
-      win->pool.size = pool_size;
-
-      struct fzn_mmap_handle buffer_back_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-      if (buffer_back_mmap.addr == NULL) {
-        panic("Failed to mmap back buffer\n");
-      }
-
-      struct fzn_mmap_handle buffer_front_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buffer_size);
-      if (buffer_front_mmap.addr == NULL) {
-        panic("Failed to mmap front buffer\n");
-      }
-
-      win->buffer_back.mmap = buffer_back_mmap;
-      win->buffer_front.mmap = buffer_front_mmap;
+  } else if (pool_size > win->pool.size) {
+    printf("resize shm\n");
+    int ok = twl_shm_resize(win->pool.fd, buffer_size * num_buffers);
+    if (ok != 0) {
+      printf("shm resize %d\n", buffer_size);
+      panic("SHM resize failed\n");
     }
-
+    win->pool.size = pool_size;
     wl_shm_pool_resize(win->pool.wl_shm_pool, buffer_size * num_buffers);
-
-    struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, 0, width, height, stride, format);
-    struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, buffer_size, width, height, stride, format);
-    wl_buffer_add_listener(buffer_back, &wl_buffer_listener, win);
-    wl_buffer_add_listener(buffer_front, &wl_buffer_listener, win);
-    win->buffer_back.wl_buffer = buffer_back;
-    win->buffer_front.wl_buffer = buffer_front;
+  } else {
+    printf("reuse shm\n");
   }
+
+  int fd = win->pool.fd;
+  struct fzn_mmap_handle buffer_back_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (buffer_back_mmap.addr == NULL) {
+    panic("Failed to mmap back buffer\n");
+  }
+
+  struct fzn_mmap_handle buffer_front_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buffer_size);
+  if (buffer_front_mmap.addr == NULL) {
+    panic("Failed to mmap front buffer\n");
+  }
+
+  try_or_panic(fzn_munmap(&win->buffer_back.mmap), "munmap back buffer");
+  try_or_panic(fzn_munmap(&win->buffer_front.mmap), "munmap front buffer");
+
+  win->buffer_back.mmap = buffer_back_mmap;
+  win->buffer_front.mmap = buffer_front_mmap;
+
+  struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, 0, width, height, stride, format);
+  struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, buffer_size, width, height, stride, format);
+  wl_buffer_add_listener(buffer_back, &wl_buffer_listener, win);
+  wl_buffer_add_listener(buffer_front, &wl_buffer_listener, win);
+  win->buffer_back.wl_buffer = buffer_back;
+  win->buffer_front.wl_buffer = buffer_front;
 }
 
 int twl_init(struct twl_context *ctx) {
