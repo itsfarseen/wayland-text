@@ -3,9 +3,12 @@
 #include <wayland-client.h>
 
 void draw(struct twl_window *win, void *frame) {
+  static int i = 0;
   uint32_t *data = frame;
   uint32_t width = win->config.width;
   uint32_t height = win->config.height;
+
+  i += 1;
 
   /* Draw checkerboxed background */
   uint32_t color = 0xFF666666;
@@ -16,7 +19,7 @@ void draw(struct twl_window *win, void *frame) {
 
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
-      if ((x + y / 8 * 8) % 16 < 8)
+      if ((i + x + (y / 16) * 16) % 32 < 16)
         data[y * width + x] = color;
       else
         data[y * width + x] = 0xFFEEEEEE;
