@@ -19,5 +19,7 @@ struct fzn_mmap_handle fzn_mmap(size_t size, int prot, int flags, int fd, off_t 
 int fzn_munmap(struct fzn_mmap_handle *handle) {
   if (handle->addr == NULL)
     return 0;
-  return munmap(handle->addr, handle->size);
+  int res = munmap(handle->addr, handle->size);
+  handle->addr = NULL;
+  return res;
 }
