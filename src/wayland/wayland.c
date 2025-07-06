@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <wayland-client.h>
 
 #define panic(text) { printf(text); exit(-1); }
@@ -28,7 +29,7 @@ static void cb_xdg_toplevel_wm_capabilities(void *data, struct xdg_toplevel *xdg
 
 // Library
 static void configure_buffers(struct twl_window *win);
-static struct wl_buffer *draw_frame(struct twl_window *win);
+static void draw_frame(struct twl_window *win);
 
 // Wayland Listeners
 // =================
@@ -78,7 +79,10 @@ static void cb_xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uin
   xdg_wm_base_pong(xdg_wm_base, serial); //
 }
 
-static void cb_wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {}
+static void cb_wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {
+  struct twl_window *win = data;
+  win->buffer.in_use = 0;
+}
 
 static void cb_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
   struct twl_window *win = data;
@@ -88,10 +92,7 @@ static void cb_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface
 
   configure_buffers(win);
 
-  struct wl_buffer *wl_buffer = draw_frame(win);
-
-  wl_surface_attach(win->wl_surface, wl_buffer, 0, 0);
-  wl_surface_commit(win->wl_surface);
+  draw_frame(win);
 }
 
 static void cb_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states) {
@@ -169,45 +170,32 @@ static void configure_buffers(struct twl_window *win) {
     win->pool.fd = fd;
     win->pool.size = pool_size;
 
-    struct wl_shm_pool *pool = wl_shm_create_pool(win->ctx.wl_shm, fd, buffer_size * num_buffers);
+    struct wl_shm_pool *pool = wl_shm_create_pool(win->ctx.wl_shm, fd, pool_size);
     win->pool.wl_shm_pool = pool;
   } else if (pool_size > win->pool.size) {
-    int ok = twl_shm_resize(win->pool.fd, buffer_size * num_buffers);
+    int ok = twl_shm_resize(win->pool.fd, pool_size);
     if (ok != 0) {
       panic("SHM resize failed\n");
     }
     win->pool.size = pool_size;
-    wl_shm_pool_resize(win->pool.wl_shm_pool, buffer_size * num_buffers);
+    wl_shm_pool_resize(win->pool.wl_shm_pool, pool_size);
   }
+
+  if (win->buffer.wl_buffer)
+    wl_buffer_destroy(win->buffer.wl_buffer);
+  try_or_panic(fzn_munmap(&win->buffer.mmap), "munmap back buffer");
 
   int fd = win->pool.fd;
-  struct fzn_mmap_handle buffer_back_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  if (buffer_back_mmap.addr == NULL) {
-    panic("Failed to mmap back buffer\n");
+  struct fzn_mmap_handle buffer_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (buffer_mmap.addr == NULL) {
+    panic("Failed to mmap buffer\n");
   }
+  win->buffer.mmap = buffer_mmap;
 
-  struct fzn_mmap_handle buffer_front_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buffer_size);
-  if (buffer_front_mmap.addr == NULL) {
-    panic("Failed to mmap front buffer\n");
-  }
-
-  try_or_panic(fzn_munmap(&win->buffer_back.mmap), "munmap back buffer");
-  try_or_panic(fzn_munmap(&win->buffer_front.mmap), "munmap front buffer");
-
-  win->buffer_back.mmap = buffer_back_mmap;
-  win->buffer_front.mmap = buffer_front_mmap;
-
-  if (win->buffer_back.wl_buffer)
-    wl_buffer_destroy(win->buffer_back.wl_buffer);
-  if (win->buffer_front.wl_buffer)
-    wl_buffer_destroy(win->buffer_front.wl_buffer);
-
-  struct wl_buffer *buffer_back = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, 0, width, height, stride, format);
-  struct wl_buffer *buffer_front = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, buffer_size, width, height, stride, format);
-  wl_buffer_add_listener(buffer_back, &wl_buffer_listener, win);
-  wl_buffer_add_listener(buffer_front, &wl_buffer_listener, win);
-  win->buffer_back.wl_buffer = buffer_back;
-  win->buffer_front.wl_buffer = buffer_front;
+  struct wl_buffer *wl_buffer = wl_shm_pool_create_buffer(win->pool.wl_shm_pool, 0, width, height, stride, format);
+  wl_buffer_add_listener(wl_buffer, &wl_buffer_listener, win);
+  win->buffer.wl_buffer = wl_buffer;
+  win->buffer.in_use = 0;
 }
 
 int twl_init(struct twl_context *ctx) {
@@ -273,21 +261,28 @@ int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn dr
   wl_surface_commit(win.wl_surface);
 
   while (wl_display_dispatch(ctx.wl_display) != -1 && !win.should_close) {
+    usleep(160);
+    draw_frame(&win);
   }
 
   wl_display_disconnect(ctx.wl_display);
   return 0;
 }
 
-struct wl_buffer *draw_frame(struct twl_window *win) {
-  struct twl_buffer buffer = win->buffer_back;
-  win->buffer_back = win->buffer_front;
-  win->buffer_front = buffer;
+static void draw_frame(struct twl_window *win) {
+  void *buffer_data = win->buffer.mmap.addr;
 
-  void *buffer_data = buffer.mmap.addr;
-  printf("drawing: %p\n", buffer_data);
-
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
   (win->draw_fn)(win, buffer_data);
+  clock_gettime(CLOCK_MONOTONIC, &end);
 
-  return buffer.wl_buffer;
+  uint64_t start_us = start.tv_sec * 1000000 + start.tv_nsec / 1000;
+  uint64_t end_us = end.tv_sec * 1000000 + end.tv_nsec / 1000;
+  float duration_ms = (end_us - start_us) / 1000;
+
+  wl_surface_attach(win->wl_surface, win->buffer.wl_buffer, 0, 0);
+  wl_surface_damage_buffer(win->wl_surface, 0, 0, win->config.width, win->config.height);
+  wl_surface_commit(win->wl_surface);
+  win->buffer.in_use = 1;
 }

@@ -38,6 +38,7 @@ struct twl_buffer_pool {
 struct twl_buffer {
   struct fzn_mmap_handle mmap;
   struct wl_buffer *wl_buffer;
+  int in_use;
 };
 
 struct twl_window {
@@ -49,8 +50,7 @@ struct twl_window {
   struct xdg_toplevel *xdg_toplevel;
   // Buffers
   struct twl_buffer_pool pool;
-  struct twl_buffer buffer_back;
-  struct twl_buffer buffer_front;
+  struct twl_buffer buffer;
   // Config
   struct twl_window_constraints constraints;
   struct twl_window_config config;
