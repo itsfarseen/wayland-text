@@ -62,4 +62,4 @@ struct twl_window {
 };
 
 int twl_init(struct twl_context *ctx);
-int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn draw, void *data);
+int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn draw, void *user_data);
