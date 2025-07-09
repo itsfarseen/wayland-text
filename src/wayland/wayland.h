@@ -1,5 +1,5 @@
 #include "../wayland-protocols/xdg-shell-protocol.h"
-#include "./utils/fzn_mmap.h"
+#include "./utils/fzn_std.h"
 #include <wayland-client.h>
 
 struct twl_context {
@@ -36,7 +36,7 @@ struct twl_buffer_pool {
 };
 
 struct twl_buffer {
-  struct fzn_mmap_handle mmap;
+  fzn_mmap mmap;
   struct wl_buffer *wl_buffer;
   int in_use;
 };
@@ -63,3 +63,4 @@ struct twl_window {
 
 int twl_init(struct twl_context *ctx);
 int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn draw, void *user_data);
+int twl_process();

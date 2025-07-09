@@ -183,10 +183,18 @@ static void configure_buffers(struct twl_window *win) {
 
   if (win->buffer.wl_buffer)
     wl_buffer_destroy(win->buffer.wl_buffer);
-  try_or_panic(fzn_munmap(&win->buffer.mmap), "munmap back buffer");
+  try_or_panic(fzn_mmap_unmap(&win->buffer.mmap), "munmap back buffer");
 
   int fd = win->pool.fd;
-  struct fzn_mmap_handle buffer_mmap = fzn_mmap(buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  const fzn_mmap_config buffer_mmap_config = {
+      .size = buffer_size,
+      .prot = PROT_READ | PROT_WRITE,
+      .flags = MAP_SHARED,
+      .fd = fd,
+      .offset = 0,
+  };
+  fzn_mmap buffer_mmap;
+  fzn_mmap_new(&buffer_mmap, &buffer_mmap_config);
   if (buffer_mmap.addr == NULL) {
     panic("Failed to mmap buffer\n");
   }
@@ -272,14 +280,7 @@ int twl_main(char *title, struct twl_window_constraints *constraints, draw_fn dr
 static void draw_frame(struct twl_window *win) {
   void *buffer_data = win->buffer.mmap.addr;
 
-  struct timespec start, end;
-  clock_gettime(CLOCK_MONOTONIC, &start);
   (win->draw_fn)(win, buffer_data);
-  clock_gettime(CLOCK_MONOTONIC, &end);
-
-  uint64_t start_us = start.tv_sec * 1000000 + start.tv_nsec / 1000;
-  uint64_t end_us = end.tv_sec * 1000000 + end.tv_nsec / 1000;
-  float duration_ms = (end_us - start_us) / 1000;
 
   wl_surface_attach(win->wl_surface, win->buffer.wl_buffer, 0, 0);
   wl_surface_damage_buffer(win->wl_surface, 0, 0, win->config.width, win->config.height);
